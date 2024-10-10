@@ -113,7 +113,7 @@ if folder_not_exist or len(os.listdir(folder)) == 0:
 
     if keyboard_input == "y" or keyboard_input == "yes":
         # Create YAML files
-        updated_folder_items, work_model = create_deployment_config()   
+        updated_folder_items, work_model = create_deployment_config()
         # Deploy YAML files
         if not no_apply:
             K8sYamlDeployer.deploy_items(folder, st=k8s_parameters['sleep'])

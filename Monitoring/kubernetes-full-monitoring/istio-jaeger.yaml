@@ -1,4 +1,3 @@
-# add otel-http and otel-grpc port in svc
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,14 +13,14 @@ spec:
     metadata:
       labels:
         app: jaeger
-      annotations:
         sidecar.istio.io/inject: "false"
+      annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "14269"
     spec:
       containers:
         - name: jaeger
-          image: "docker.io/jaegertracing/all-in-one:1.35"
+          image: "docker.io/jaegertracing/all-in-one:1.58"
           env:
             - name: BADGER_EPHEMERAL
               value: "false"

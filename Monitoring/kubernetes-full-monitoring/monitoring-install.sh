@@ -16,12 +16,19 @@ helm repo add istio https://istio-release.storage.googleapis.com/charts
 helm repo update
 kubectl create namespace istio-system
 helm install istio-base istio/base -n istio-system
-helm install istiod istio/istiod -n istio-system --wait
+helm install istiod istio/istiod -n istio-system --wait --set pilot.traceSampling=100
 helm install istio-ingressgateway istio/gateway -n istio-system
 kubectl label namespace default istio-injection=enabled
 
+istioctl install -f istio-config.yaml
+
 # Istio - Prometeus integration
 kubectl apply -f istio-prometheus-operator.yaml
+
+# OpenTelemetry
+kubectl apply -f istio-otel.merged.yaml -n istio-system
+istioctl install -y -f istio-mesh.yaml
+kubectl apply -f istio-telemetry.yaml -n istio-system
 
 # Jarger
 kubectl apply -f jaeger.yaml

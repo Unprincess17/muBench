@@ -1,6 +1,6 @@
 {
    "ServiceGraphParameters": {
-      "vertices": 2,
+      "vertices": 10,
       "external_service_groups": 1,
       "power": 0.05,
       "seq_len": 100,

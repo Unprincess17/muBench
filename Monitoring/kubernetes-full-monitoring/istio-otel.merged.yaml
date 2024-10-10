@@ -1,0 +1,168 @@
+# Based on istio's otel yaml, 
+# add otlphttp from deepflow's otel yaml. 
+# Delete grpc part, and export jaeger to http collector
+# use otel/opentelemetry-collector-contrib in deepflow-otel
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opentelemetry-collector-conf
+  labels:
+    app: opentelemetry-collector
+data:
+  opentelemetry-collector-config: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+    exporters:
+      otlphttp:
+        traces_endpoint: "http://deepflow-agent.deepflow/api/v1/otel/trace"
+        tls:
+          insecure: true
+        retry_on_failure:
+          enabled: true
+      jaeger:
+        endpoint: jaeger-collector.istio-system.svc.cluster.local:14268
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+        retry_on_failure:
+          enabled: true
+      logging:
+    processors:
+      batch:
+      k8sattributes:
+      resource:
+        attributes:
+        - key: app.host.ip
+          from_attribute: k8s.pod.ip
+          action: insert
+    extensions:
+      zpages: {}
+      memory_ballast:
+        # Memory Ballast size should be max 1/3 to 1/2 of memory.
+        size_mib: 165
+    service:
+      extensions: [zpages, memory_ballast]
+      pipelines:
+        traces:
+          receivers:
+          - otlp
+          processors: 
+          - k8sattributes
+          - resource
+          - batch
+          exporters:
+          - jaeger
+          - otlphttp
+          - logging
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opentelemetry-collector
+  labels:
+    app: opentelemetry-collector
+spec:
+  ports:
+    - name: http-otlp # HTTP endpoint for OpenTelemetry receiver.
+      port: 4318
+      protocol: TCP
+      targetPort: 4318
+  selector:
+    app: opentelemetry-collector
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opentelemetry-collector
+spec:
+  selector:
+    matchLabels:
+      app: opentelemetry-collector
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: opentelemetry-collector
+        sidecar.istio.io/inject: "false" # do not inject
+    spec:
+      serviceAccountName: opentelemetry-collector
+      containers:
+        - command:
+            - "/otelcol-contrib"
+            - "--config=/conf/opentelemetry-collector-config.yaml"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          image: otel/opentelemetry-collector-contrib:0.62.0
+          imagePullPolicy: IfNotPresent
+          name: opentelemetry-collector
+          ports:
+            - containerPort: 4318
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 200m
+              memory: 400Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - name: opentelemetry-collector-config-vol
+              mountPath: /conf
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: opentelemetry-collector-config
+                path: opentelemetry-collector-config.yaml
+            name: opentelemetry-collector-conf
+          name: opentelemetry-collector-config-vol
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentelemetry-collector
+  namespace: istio-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-role-binding
+subjects:
+- kind: ServiceAccount
+  name: opentelemetry-collector
+  namespace: istio-system
+roleRef:
+  kind: ClusterRole
+  name: otel-collector-role
+  apiGroup: rbac.authorization.k8s.io

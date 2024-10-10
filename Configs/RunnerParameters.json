@@ -4,7 +4,7 @@
       "workload_files_path_list": ["SimulationWorkspace/workload.json"],
       "workload_rounds": 1,
       "workload_type": "greedy",
-      "workload_events": 5000,
+      "workload_events": 10,
       "thread_pool_size": 4,
       "result_file": "result"
    },
